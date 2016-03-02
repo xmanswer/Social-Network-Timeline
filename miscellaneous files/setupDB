@@ -1,0 +1,53 @@
+#####setup task1 mysql#####
+#login mysql
+mysql -u root -p15319project
+create database users
+
+#cp files to database folder
+sudo chmod 777 *.csv
+cp users.csv /var/lib/mysql/users
+cp userinfo.csv /var/lib/mysql/users
+
+#create tables
+mysql -u root -p15319project users < createtableMysql.sql
+mysql -u root -p15319project users < loadCSVdata.sql
+
+#####setup task2 hbase#####
+#config aws and s3
+sudo pip install awscli
+aws configure
+## AWSAccessKeyId=AKIAJWVJUGINPZKLNC5A
+## AWSSecretKey=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
+## default region = us-east-1
+## default format = text
+# copy subsample
+
+sudo pip install s3cmd
+s3cmd --configure
+# configure s3cmd
+## Access Key: AKIAJWVJUGINPZKLNC5A
+## Secret Key: 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
+## Encryption password: hmm
+## Path to GPG program [/usr/bin/gpg]: /usr/bin/gpg
+## Use HTTPS protocol [No]: False
+## HTTP Proxy server name:
+## Test access with supplied credentials? [Y/n] y
+## Save settings? [y/N] y
+
+mkdir task2
+cd task2
+s3cmd get s3://15619project34/csvFiles/*.csv
+hadoop fs -mkdir /out
+hadoop fs -mkdir /out2
+hadoop fs -put out.csv /out
+hadoop fs -put out2.csv /out2
+
+#go to hbase shell
+create 'userFollowers', {NAME => 'followers'}
+create 'userFollowing', {NAME => 'following'}
+
+#exit hbase shell
+hbase org.apache.hadoop.hbase.mapreduce.ImportTsv '-Dimporttsv.separator=,' -Dimporttsv.bulk.output=output1 -Dimporttsv.columns=HBASE_ROW_KEY,followers:followerID userFollowers /out
+hbase org.apache.hadoop.hbase.mapreduce.LoadIncrementalHFiles output1 userFollowers
+hbase org.apache.hadoop.hbase.mapreduce.ImportTsv '-Dimporttsv.separator=,' -Dimporttsv.bulk.output=output2 -Dimporttsv.columns=HBASE_ROW_KEY,following:followingID userFollowing /out2
+hbase org.apache.hadoop.hbase.mapreduce.LoadIncrementalHFiles output2 userFollowing
